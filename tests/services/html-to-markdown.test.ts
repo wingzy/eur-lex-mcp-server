@@ -267,7 +267,7 @@ describe('consolidated-text point labels (#120)', () => {
     ],
   ])(
     'joins labels in linear time: %s',
-    // CPU time: the 80k/5k ratio under 64, and the 80k conversion under 100 ms.
+    // CPU time: the 80k over 16×5k ratio under 4, and the 80k conversion under 100 ms.
     (_label, build) =>
       expectLinearScaling((n) => {
         const html = build(n);

@@ -2,8 +2,6 @@ name: gitleaks
 on:
   workflow_dispatch:
   push:
-  schedule:
-    - cron: "30 6 * * 2" # run every tuesday at 6:30 AM UTC
 jobs:
   scan:
     name: gitleaks

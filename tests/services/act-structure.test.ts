@@ -920,7 +920,7 @@ describe('headings in every EUR-Lex language (#107)', () => {
     (_label, build) => {
       const hu = actHtml(AI_ACT_HEADINGS.HU);
       const headings = parseActStructure(hu, 'html', 'HU');
-      // CPU time: the 80k/5k ratio under 64, and the 80k read under 40 ms.
+      // CPU time: the 80k over 16×5k ratio under 4, and the 80k read under 40 ms.
       return expectLinearScaling((n) => {
         const articles = build(n);
         return () => extractSections(hu, headings, { articles }, 'HU');
@@ -1156,7 +1156,7 @@ describe('headings in every EUR-Lex language (#107)', () => {
     ],
   ];
 
-  // CPU time: the 80k/5k ratio under 64, and the 80k parse under 40 ms.
+  // CPU time: the 80k over 16×5k ratio under 4, and the 80k parse under 40 ms.
   it.each(ADVERSARIAL)(
     'stays linear on %s',
     (_label, build, format, language) =>
@@ -1428,7 +1428,7 @@ describe('quoted amending text is not the act’s own structure (#106)', () => {
     ],
   ];
 
-  // CPU time: the 80k/5k ratio under 64, and the 80k parse under 40 ms. A Markdown
+  // CPU time: the 80k over 16×5k ratio under 4, and the 80k parse under 40 ms. A Markdown
   // case parses its source HTML too, built at the same size.
   it.each(ADVERSARIAL)(
     'stays linear on %s',
@@ -1616,7 +1616,7 @@ describe('html bodies written on one line (#126)', () => {
     ['heading paragraphs on one line', (n: number) => fill('<p>Article 1 </p><p>Title</p>', n)],
   ])(
     'splits a one-line html body in linear time: %s',
-    // CPU time: the 80k/5k ratio under 64, and the 80k parse under 40 ms.
+    // CPU time: the 80k over 16×5k ratio under 4, and the 80k parse under 40 ms.
     (_label, build) =>
       expectLinearScaling((n) => {
         const text = build(n);

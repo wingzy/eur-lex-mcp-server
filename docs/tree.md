@@ -16,7 +16,6 @@ eur-lex-mcp-server/
 │   │   └── feature_request.yml
 │   ├── workflows/
 │   │   ├── checks.yaml
-│   │   ├── codeql.yml
 │   │   ├── gitleaks.yaml
 │   │   ├── pr-name-check.yaml
 │   │   ├── staging-push.yaml

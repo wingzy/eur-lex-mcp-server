@@ -39,18 +39,24 @@ export async function bestCpuMs(run: () => unknown, rounds = 5): Promise<number>
 
 const SMALL = 5_000;
 const LARGE = 80_000;
+/** Small calls per small round — the same character count as one large call. */
+const SMALL_BATCH = LARGE / SMALL;
 
 /**
  * Asserts that the work `setup(n)` returns grows linearly with `n`. `setup` builds
  * the input for an `n`-character case outside the measurement and returns the call
  * to time; each size is timed by its best of five rounds of CPU time.
  *
- * The 80k time over the 5k time is about 16 for a linear pass and 256 for a
- * quadratic one, so it must stay under 64, their geometric midpoint. The rounds
- * alternate between the two sizes, so a stretch on a slower core or a contended
- * cache slows both alike instead of skewing the ratio. The 80k call must also stay
- * under `maxLargeMs`: a quadratic term still small next to a heavy linear one can
- * hold the ratio under 64 while multiplying the time.
+ * One 5k call runs in well under a millisecond, and thread CPU time on a stock
+ * Linux kernel (GitHub's runners included) advances in whole-millisecond ticks, so
+ * timed alone it reads 0 and the ratio below reads Infinity. Each small round
+ * therefore times 16 back-to-back 5k calls, the same character count as one 80k
+ * call: the 80k time over that is about 1 for a linear pass and 16 for a quadratic
+ * one, so it must stay under 4, their geometric midpoint. The rounds alternate
+ * between the two sizes, so a stretch on a slower core or a contended cache slows
+ * both alike instead of skewing the ratio. The 80k call must also stay under
+ * `maxLargeMs`: a quadratic term still small next to a heavy linear one can hold
+ * the ratio under 4 while multiplying the time.
  */
 export async function expectLinearScaling(
   setup: (n: number) => () => unknown,
@@ -58,13 +64,16 @@ export async function expectLinearScaling(
 ): Promise<void> {
   const small = setup(SMALL);
   const large = setup(LARGE);
+  const smallBatch = () => {
+    for (let i = 0; i < SMALL_BATCH; i++) small();
+  };
   let tSmall = Number.POSITIVE_INFINITY;
   let tLarge = Number.POSITIVE_INFINITY;
   for (let round = 0; round < 5; round++) {
-    tSmall = Math.min(tSmall, await cpuMs(small));
+    tSmall = Math.min(tSmall, await cpuMs(smallBatch));
     tLarge = Math.min(tLarge, await cpuMs(large));
   }
-  const timings = `${tLarge.toFixed(3)} ms at ${LARGE} characters, ${tSmall.toFixed(3)} ms at ${SMALL}`;
-  expect(tLarge / tSmall, timings).toBeLessThan(64);
+  const timings = `${tLarge.toFixed(3)} ms at ${LARGE} characters, ${tSmall.toFixed(3)} ms for ${SMALL_BATCH} × ${SMALL}`;
+  expect(tLarge / tSmall, timings).toBeLessThan(4);
   expect(tLarge, timings).toBeLessThan(maxLargeMs);
 }
