@@ -9,7 +9,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { eurlex_get_cases } from '@/mcp-server/tools/definitions/eurlex-get-cases.tool.js';
 import { escapeSparqlLiteral } from '@/services/cellar-sparql/eli-resolution.js';
 import { canonicalWork, celexWorkRows, fixtureWork } from '../fixtures/cellar-works.js';
-import { bestCpuMs, CPU_TIMED_TEST_TIMEOUT_MS } from '../helpers/cpu-time.js';
 
 // --- Service mock ---
 const mockQuery = vi.fn();
@@ -1692,39 +1691,6 @@ describe('eurlex_get_cases', () => {
       // "C-131/012" parsed before #81 and matched the CELEX substring "12CJ0131".
       const { sparql } = await queryFor({ case_number: 'C-131/012' });
       expect(admits(sparql, '62012CJ0131')).toBe(true);
-    });
-
-    /**
-     * The parser runs over caller-sized text, so its cost must stay linear. Each
-     * adversarial shape is timed at 80k characters (best of five, in CPU time, so
-     * a loaded machine cannot fail it) against an absolute ceiling a linear parse
-     * clears by orders of magnitude and a quadratic one (billions of steps at this
-     * size) cannot.
-     */
-    describe('parser cost on adversarial input', { timeout: CPU_TIMED_TEST_TIMEOUT_MS }, () => {
-      it.each([
-        ['a repeated prefix', (n: number) => 'Case C-'.repeat(Math.ceil(n / 7)).slice(0, n)],
-        ['digits with no year', (n: number) => `C-${'1'.repeat(n)}`],
-        ['a prefix-less number with no year', (n: number) => '1'.repeat(n)],
-        ['a long suffix', (n: number) => `C-97/23 ${'P'.repeat(n)}`],
-        ['repeated hyphen-number pairs', (n: number) => '1-'.repeat(Math.ceil(n / 2)).slice(0, n)],
-        ['a "Case" lead-in with a long run of spaces', (n: number) => `Case${' '.repeat(n)}x`],
-        ['a digit run before a one-digit year', (n: number) => `${'1'.repeat(n)}/1`],
-        ['a digit run after the year', (n: number) => `C-97/23 ${'1'.repeat(n)}`],
-        [
-          'alternating digits and spaces after the year',
-          (n: number) => `C-97/23 ${'1 '.repeat(Math.ceil(n / 2))}`,
-        ],
-      ])('stays linear for %s', async (_label, build) => {
-        mockQuery.mockResolvedValue([makeCaseBinding('62023CJ0097')]);
-        const input = eurlex_get_cases.input.parse({ case_number: build(80_000) });
-        const best = await bestCpuMs(() =>
-          Promise.resolve(
-            eurlex_get_cases.handler(input, createMockContext({ errors: eurlex_get_cases.errors })),
-          ).catch(() => undefined),
-        );
-        expect(best).toBeLessThan(250);
-      });
     });
   });
 

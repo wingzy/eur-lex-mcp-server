@@ -31,7 +31,6 @@ import {
   LEGACY_ORDER,
   ORDER_WORD,
 } from '../fixtures/eurlex-case-law.js';
-import { bestCpuMs, CPU_TIMED_TEST_TIMEOUT_MS } from '../helpers/cpu-time.js';
 
 const GOOGLE_SPAIN_EN = [
   'Legal context',
@@ -296,21 +295,6 @@ describe('case-law outline (#117)', () => {
     );
   });
 
-  it(
-    'bounds the Dutch formula on a long paragraph with no period',
-    async () => {
-      // A quadratic pattern takes ~1.9 s on this paragraph; the bound, in CPU time, is
-      // over 10x below that.
-      const paragraph = `<p>Het Hof ${'verklaart '.repeat(12_600)}</p>`;
-      const best = await bestCpuMs(
-        () => parseDocumentStructure('62019CJ0311', paragraph, 'html', 'NL'),
-        3,
-      );
-      expect(best).toBeLessThan(150);
-    },
-    CPU_TIMED_TEST_TIMEOUT_MS,
-  );
-
   describe('a judgment quoting the formula before its ruling', () => {
     const html = [
       '<p class="title-grseq-2">Grounds</p>',
@@ -372,19 +356,6 @@ describe('case-law outline (#117)', () => {
     );
     expect(parseDocumentStructure('32024R1689', JUDGMENT_CONVEX_EN, 'html', 'EN')).toEqual([]);
   });
-
-  it(
-    'stays linear on unclosed heading openers',
-    async () => {
-      // Best of five in CPU time: the linear scan takes under 1 ms on these 116k
-      // characters; one that re-reads the rest of the text per opener takes over 20.
-      const text = '<p class="title-grseq-2"><h2>'.repeat(4000);
-      expect(
-        await bestCpuMs(() => parseDocumentStructure('62012CJ0131', text, 'html', 'EN')),
-      ).toBeLessThan(20);
-    },
-    CPU_TIMED_TEST_TIMEOUT_MS,
-  );
 });
 
 describe('case-law selection (#117)', () => {

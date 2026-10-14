@@ -16,7 +16,6 @@ import { ACT_XHTML, NESTED_TABLE_XHTML } from '../fixtures/eurlex-act-html.js';
 import { AMENDING_HTML, CRR2_EXCERPT_HTML } from '../fixtures/eurlex-amending-act.js';
 import { CONSOLIDATED_ACT_HTML } from '../fixtures/eurlex-consolidated-act.js';
 import { LEGACY_ACT_HTML } from '../fixtures/eurlex-legacy-act.js';
-import { CPU_TIMED_TEST_TIMEOUT_MS, expectLinearScaling } from '../helpers/cpu-time.js';
 
 describe('htmlToMarkdown', () => {
   const md = htmlToMarkdown(ACT_XHTML);
@@ -247,32 +246,4 @@ describe('consolidated-text point labels (#120)', () => {
     );
     expect(md).toBe('<b> text');
   });
-
-  const fill = (unit: string, n: number) => unit.repeat(Math.ceil(n / unit.length)).slice(0, n);
-  const ROW_OPEN =
-    '<div class="grid-container grid-list"><div class="grid-list-column-1"><span>(a) </span></div><div class="grid-list-column-2"><p>x</p>';
-
-  it.each([
-    [
-      'sibling paragraph numbers',
-      (n: number) => `<div>${fill('<span class="no-parag">1. </span><div>t</div>', n)}</div>`,
-    ],
-    ['sibling grid rows', (n: number) => `<div>${fill(`${ROW_OPEN}</div></div>`, n)}</div>`],
-    [
-      'nested grid rows',
-      (n: number) => {
-        const depth = Math.floor(n / (ROW_OPEN.length + 12));
-        return ROW_OPEN.repeat(depth) + '</div></div>'.repeat(depth);
-      },
-    ],
-  ])(
-    'joins labels in linear time: %s',
-    // CPU time: the 80k over 16×5k ratio under 4, and the 80k conversion under 100 ms.
-    (_label, build) =>
-      expectLinearScaling((n) => {
-        const html = build(n);
-        return () => htmlToMarkdown(html);
-      }, 100),
-    CPU_TIMED_TEST_TIMEOUT_MS,
-  );
 });

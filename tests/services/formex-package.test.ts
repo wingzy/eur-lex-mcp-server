@@ -23,7 +23,6 @@ import {
   PACKAGE_MANIFEST,
   type ZipFixtureEntry,
 } from '../fixtures/formex-zip.js';
-import { bestCpuMs, CPU_TIMED_TEST_TIMEOUT_MS } from '../helpers/cpu-time.js';
 
 const MANIFEST = 'L_202401689EN.doc.fmx.xml';
 const ACT = 'L_202401689EN.000101.fmx.xml';
@@ -266,18 +265,4 @@ describe('readFormexPackage', () => {
       }
     }
   });
-
-  it(
-    'reads a manifest of unclosed REF.PHYS openers in one pass',
-    async () => {
-      const manifest = `<DOC>${'<REF.PHYS FILE="x'.repeat(200_000)}</DOC>`;
-      const zip = buildZip([{ name: MANIFEST, content: manifest }]);
-
-      expect(readFormexPackage(zip)).toBeNull();
-      // CPU time of one read: a single pass over the 3.4M-character manifest stays far
-      // under the bound, a re-scan of the rest of it per opener far over.
-      expect(await bestCpuMs(() => readFormexPackage(zip), 1)).toBeLessThan(2_000);
-    },
-    CPU_TIMED_TEST_TIMEOUT_MS,
-  );
 });

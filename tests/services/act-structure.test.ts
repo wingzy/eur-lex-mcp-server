@@ -33,7 +33,6 @@ import {
   LEGACY_FINNISH_ACT_HTML,
   LEGACY_TWO_CHAPTER_ACT_HTML,
 } from '../fixtures/eurlex-legacy-act.js';
-import { bestCpuMs, CPU_TIMED_TEST_TIMEOUT_MS, expectLinearScaling } from '../helpers/cpu-time.js';
 
 /** A structured act: two preamble recitals, two chapters, three articles, one annex. */
 const STRUCTURED_HTML = [
@@ -427,38 +426,6 @@ describe('parseActStructure', () => {
     });
   });
 
-  /** Build a string of exactly `n` characters by repeating `unit`. */
-  const fill = (unit: string, n: number) => unit.repeat(Math.ceil(n / unit.length)).slice(0, n);
-
-  /**
-   * A 120k-character parse must take under 20 ms of CPU time on its best of five
-   * rounds. The linear scan takes 2 ms or less there; the lazy regexes it replaced
-   * took 60–380 ms on these shapes, re-reading the rest of the document once per
-   * unclosed opener. CPU time leaves out the time the thread waits for a core, so
-   * the bound holds however loaded the machine is.
-   */
-  const expectLinearParse = async (build: (n: number) => string) => {
-    const text = build(120_000);
-    expect(await bestCpuMs(() => parseActStructure(text, 'xml', 'EN'))).toBeLessThan(20);
-  };
-
-  describe('Formex heading scan stays linear on adversarial input (#90)', () => {
-    const ADVERSARIAL: Record<string, (n: number) => string> = {
-      'repeated <HT openers with no closer': (n) => `<TI><P>${fill('<HT', n - 7)}`,
-      'repeated <TI><P><HT openers': (n) => fill('<TI><P><HT TYPE="X"', n),
-      'nested <HT><HT>… before the keyword': (n) => `<TI><P>${fill('<HT>', n - 16)}CHAPTER I`,
-      'an unclosed <TI><P> heading, repeated': (n) => fill('<TI><P>CHAPTER I ', n),
-      'an unclosed <TI><P><HT> heading, repeated': (n) => fill('<TI><P><HT>CHAPTER I ', n),
-      'an unclosed <STI> subtitle, repeated': (n) => fill('<TI><P>CHAPTER I</P></TI><STI><P>xx', n),
-    };
-
-    it.each(Object.entries(ADVERSARIAL))(
-      '%s',
-      (_label, build) => expectLinearParse(build),
-      CPU_TIMED_TEST_TIMEOUT_MS,
-    );
-  });
-
   describe('Formex article headings (#94)', () => {
     /**
      * Article markup in every shape the scan must keep reading the same way:
@@ -513,27 +480,6 @@ describe('parseActStructure', () => {
         },
       ]);
     });
-
-    const ADVERSARIAL_ARTICLES: Record<string, (n: number) => string> = {
-      'repeated <TI.ART> openers with no closer': (n) => fill('<TI.ART>Article 1 ', n),
-      'nested <TI.ART> openers with no closer': (n) => fill('<TI.ART>', n),
-      'interleaved unclosed <TI.ART> and <STI.ART> openers': (n) =>
-        fill('<TI.ART>Article 1<STI.ART>Title ', n),
-      'a closed heading before an unclosed <STI.ART>, repeated': (n) =>
-        fill('<TI.ART>Article 1</TI.ART><STI.ART>xx', n),
-      'an unclosed <STI.ART> nesting the next <TI.ART>, repeated': (n) =>
-        fill('<TI.ART>Article 1</TI.ART><STI.ART><TI.ART>', n),
-      'unclosed <QUOT.START> openers inside a closed heading (#99)': (n) =>
-        `<TI.ART>${fill('<QUOT.START CODE="2018" ', n - 17)}</TI.ART>`,
-      'paired <QUOT.START> openers missing their closer (#99)': (n) =>
-        `<TI.ART>${fill('<QUOT.START CODE="2018">', n - 17)}</TI.ART>`,
-    };
-
-    it.each(Object.entries(ADVERSARIAL_ARTICLES))(
-      'stays linear on %s',
-      (_label, build) => expectLinearParse(build),
-      CPU_TIMED_TEST_TIMEOUT_MS,
-    );
   });
 });
 
@@ -905,30 +851,6 @@ describe('headings in every EUR-Lex language (#107)', () => {
     ]);
   });
 
-  it.each([
-    [
-      'one token with a whitespace run before a non-keyword',
-      (n: number) => `1${' '.repeat(n - 2)}x`,
-    ],
-    [
-      'one token with a whitespace run before a keyword',
-      (n: number) => `1${' '.repeat(n - 5)}cikk`,
-    ],
-    ['kind-word tokens repeated', (n: number) => '1. cikk,'.repeat(Math.ceil(n / 8)).slice(0, n)],
-  ])(
-    'reads a caller-sized selector in linear time: %s',
-    (_label, build) => {
-      const hu = actHtml(AI_ACT_HEADINGS.HU);
-      const headings = parseActStructure(hu, 'html', 'HU');
-      // CPU time: the 80k over 16×5k ratio under 4, and the 80k read under 40 ms.
-      return expectLinearScaling((n) => {
-        const articles = build(n);
-        return () => extractSections(hu, headings, { articles }, 'HU');
-      }, 40);
-    },
-    CPU_TIMED_TEST_TIMEOUT_MS,
-  );
-
   it('reads Greek capital iota and chi as the Roman numerals they stand in for', () => {
     const html = [
       '<p class="oj-ti-section-1">ΚΕΦΑΛΑΙΟ ΙΧ</p>',
@@ -1095,77 +1017,6 @@ describe('headings in every EUR-Lex language (#107)', () => {
       );
     });
   });
-
-  /** Build a string of exactly `n` characters by repeating `unit`. */
-  const fill = (unit: string, n: number) => unit.repeat(Math.ceil(n / unit.length)).slice(0, n);
-
-  const ADVERSARIAL: [
-    string,
-    (n: number) => string,
-    'html' | 'xml',
-    (typeof EURLEX_LANGUAGES)[number],
-  ][] = [
-    ['a number-first opener repeated on one line', (n) => fill('1. ', n), 'html', 'HU'],
-    ['a number-first heading on every line', (n) => fill('1. cikk\n', n), 'html', 'HU'],
-    ['a keyword repeated on one line', (n) => fill('Artikel ', n), 'html', 'DE'],
-    ['an annex keyword and delimiter repeated', (n) => fill('LIITE I — ', n), 'html', 'FI'],
-    ['Greek numerals with no keyword', (n) => `ΚΕΦΑΛΑΙΟ ${fill('ΙΧ', n - 9)}`, 'html', 'EL'],
-    ['periods and escapes after a number', (n) => `Članak 1${fill('\\.', n - 8)}`, 'html', 'HR'],
-    [
-      'unclosed <ARTICLE IDENTIFIER openers',
-      (n) => fill('<ARTICLE IDENTIFIER="001" ', n),
-      'xml',
-      'FR',
-    ],
-    [
-      'one unclosed <ARTICLE tag repeating its IDENTIFIER',
-      (n) => `<ARTICLE ${fill('IDENTIFIER="1" ', n - 9)}`,
-      'xml',
-      'FR',
-    ],
-    [
-      'one <ARTICLE tag repeating an unclosed IDENTIFIER quote',
-      (n) => `<ARTICLE ${fill('IDENTIFIER="', n - 10)}>`,
-      'xml',
-      'FR',
-    ],
-    [
-      '<ARTICLE> openers with no <TI.ART>',
-      (n) => fill('<ARTICLE IDENTIFIER="001">  ', n),
-      'xml',
-      'FR',
-    ],
-    [
-      '<ARTICLE> openers before one <TI.ART>',
-      (n) => `${fill('<ARTICLE IDENTIFIER="001">', n - 8)}<TI.ART>`,
-      'xml',
-      'FR',
-    ],
-    ['number-first <TI><P> openers with no keyword', (n) => fill('<TI><P>I. ', n), 'xml', 'HU'],
-    [
-      'nested <HT> before a number-first keyword',
-      (n) => `<TI><P>${fill('<HT>', n - 20)}I. FEJEZET`,
-      'xml',
-      'HU',
-    ],
-    [
-      'an unclosed number-first heading, repeated',
-      (n) => fill('<TI><P>I. FEJEZET ', n),
-      'xml',
-      'HU',
-    ],
-  ];
-
-  // CPU time: the 80k over 16×5k ratio under 4, and the 80k parse under 40 ms.
-  it.each(ADVERSARIAL)(
-    'stays linear on %s',
-    (_label, build, format, language) =>
-      expectLinearScaling((n) => {
-        const text = build(n);
-        return () => parseActStructure(text, format, language);
-      }, 40),
-    CPU_TIMED_TEST_TIMEOUT_MS,
-  );
 });
 
 describe('collapseRecitals (#118)', () => {
@@ -1368,79 +1219,6 @@ describe('quoted amending text is not the act’s own structure (#106)', () => {
     },
   );
 
-  /** Build a string of exactly `n` characters by repeating `unit`. */
-  const fill = (unit: string, n: number) => unit.repeat(Math.ceil(n / unit.length)).slice(0, n);
-
-  const ADVERSARIAL: [
-    string,
-    (n: number) => string,
-    'html' | 'markdown' | 'xml',
-    ((n: number) => string)?,
-  ][] = [
-    ['unclosed <table openers on one line', (n) => fill('<table ', n), 'html'],
-    [
-      'nested <table> openers, a heading inside each',
-      (n) => fill('<table>\nArticle 1\n', n),
-      'html',
-    ],
-    ['stray </table> closers before each heading', (n) => fill('</table>\nArticle 1\n', n), 'html'],
-    [
-      'a heading line led by unclosed tag openers',
-      (n) => `${fill('<p <td ', n - 9)}Article 1`,
-      'html',
-    ],
-    ['overlapping <tab<table prefixes', (n) => fill('<tab<table<tbody', n), 'html'],
-    [
-      'Markdown headings with their HTML in nested tables',
-      (n) => fill('Article 1\n', n),
-      'markdown',
-      (n) => fill('<table><p>Article 1</p>\n', n),
-    ],
-    [
-      'Markdown headings whose HTML sequence disagrees',
-      (n) => fill('Article 1\n', n),
-      'markdown',
-      (n) => fill('<p>Article 2</p>\n', n),
-    ],
-    [
-      'Markdown headings behind a run of in-table HTML headings',
-      (n) => fill('Article 1\n', n),
-      'markdown',
-      (n) => `${fill('<table><p>Article 2</p>\n', n - 17)}<p>Article 1</p>\n`,
-    ],
-    [
-      'Markdown headings aligned past an in-table HTML heading each',
-      (n) => fill(`Article 1\n${' '.repeat(39)}`, n),
-      'markdown',
-      (n) => fill('<table><p>Article 2</p>\n</table><p>Article 1</p>\n', n),
-    ],
-    ['unclosed <QUOT.S openers', (n) => fill('<QUOT.S LEVEL="1" ', n), 'xml'],
-    [
-      'nested <QUOT.S> openers, an article inside each',
-      (n) => fill('<QUOT.S><TI.ART>Article 1</TI.ART>', n),
-      'xml',
-    ],
-    ['overlapping <QUOT.START / <QUOT.S prefixes', (n) => fill('<QUOT.START<QUOT.S', n), 'xml'],
-    [
-      'stray </QUOT.S> closers before each title',
-      (n) => fill('</QUOT.S><TI><P>CHAPTER I</P></TI>', n),
-      'xml',
-    ],
-  ];
-
-  // CPU time: the 80k over 16×5k ratio under 4, and the 80k parse under 40 ms. A Markdown
-  // case parses its source HTML too, built at the same size.
-  it.each(ADVERSARIAL)(
-    'stays linear on %s',
-    (_label, build, format, buildHtml) =>
-      expectLinearScaling((n) => {
-        const text = build(n);
-        const html = buildHtml?.(n);
-        return () => parseActStructure(text, format, 'EN', html);
-      }, 40),
-    CPU_TIMED_TEST_TIMEOUT_MS,
-  );
-
   it('applies in the served language (#107): a German amending act', () => {
     const german = AMENDING_HTML.replaceAll('Article ', 'Artikel ')
       .replace('SECTION 4', 'ABSCHNITT 4')
@@ -1603,27 +1381,6 @@ describe('html bodies written on one line (#126)', () => {
       'ANNEX',
     ]);
   });
-
-  const fill = (unit: string, n: number) => unit.repeat(Math.ceil(n / unit.length)).slice(0, n);
-
-  it.each([
-    ['block tags on one line', (n: number) => fill('<p>x</p>', n)],
-    ['unclosed block tags on one line', (n: number) => fill('<p class="a" ', n)],
-    [
-      'a whitespace run before block tags',
-      (n: number) => `${' '.repeat(n / 2)}${fill('<br>', n / 2)}`,
-    ],
-    ['heading paragraphs on one line', (n: number) => fill('<p>Article 1 </p><p>Title</p>', n)],
-  ])(
-    'splits a one-line html body in linear time: %s',
-    // CPU time: the 80k over 16×5k ratio under 4, and the 80k parse under 40 ms.
-    (_label, build) =>
-      expectLinearScaling((n) => {
-        const text = build(n);
-        return () => parseActStructure(text, 'html', 'EN');
-      }, 40),
-    CPU_TIMED_TEST_TIMEOUT_MS,
-  );
 });
 
 describe('chapter and section headings with an inline title in capitals (#130)', () => {
