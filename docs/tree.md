@@ -15,7 +15,12 @@ eur-lex-mcp-server/
 │   │   ├── config.yml
 │   │   └── feature_request.yml
 │   ├── workflows/
-│   │   └── codeql.yml
+│   │   ├── checks.yaml
+│   │   ├── codeql.yml
+│   │   ├── gitleaks.yaml
+│   │   ├── pr-name-check.yaml
+│   │   ├── staging-push.yaml
+│   │   └── tests.yaml
 │   ├── CODE_OF_CONDUCT.md
 │   ├── CONTRIBUTING.md
 │   ├── FUNDING.yml

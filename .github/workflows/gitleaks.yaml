@@ -1,0 +1,20 @@
+name: gitleaks
+on:
+  workflow_dispatch:
+  push:
+  schedule:
+    - cron: "30 6 * * 2" # run every tuesday at 6:30 AM UTC
+jobs:
+  scan:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # org secret

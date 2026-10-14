@@ -1,0 +1,47 @@
+# Reusable verification workflow — called by tests.yaml today, and by the
+# future deploy workflows (staging-push, production-push) once CD exists.
+on:
+  workflow_call:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          # Reads `packageManager` from package.json so the CI version follows the repo.
+          bun-version-file: package.json
+
+      - name: Print tool versions
+        run: |
+          git --version
+          bun --version
+
+      - name: Cache Bun package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: eur-lex-mcp-server-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            eur-lex-mcp-server-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Biome lint + format, TypeScript, MCP definition linter, packaging parity,
+      # changelog sync, docs/skills sync, tracked-secrets scan. Read-only
+      # (--no-fix) and without the network-bound audit/outdated checks (--fast),
+      # which are a local concern.
+      - name: Lint, format, typecheck and definition checks
+        run: bun run devcheck --no-fix --fast
+
+      - name: Tests
+        run: bun run test
+
+      - name: Build
+        run: bun run build

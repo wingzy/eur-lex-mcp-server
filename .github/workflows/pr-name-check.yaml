@@ -1,0 +1,23 @@
+name: PR Title Validator
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  check-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PR title
+        run: |
+          pr_title="${{ github.event.pull_request.title }}"
+          echo "PR Title: $pr_title"
+          pattern="^(chore|fix|feat|refactor)\([a-zA-Z0-9]+\): .+"
+          if [[ ! "$pr_title" =~ $pattern ]]; then
+            echo "❌ PR title does not follow the required schema. Please use the format 'chore|fix|feat|refactor(One word description): Short summary of the PR'"
+            exit 1
+          fi
+          echo "✅ PR title follows the required schema!"
